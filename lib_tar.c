@@ -1,4 +1,64 @@
 #include "lib_tar.h"
+#include <unistd.h>   
+#include <string.h>   
+#include <stdint.h>  
+#include <sys/types.h>
+#include <stdlib.h>  
+
+#define BLOCKSIZE 512
+#define PATHBUF 512
+
+static int is_zero_block(const uint8_t *b) {
+    for (int i = 0; i < BLOCKSIZE; i++) {
+        if (b[i] != 0) return 0;
+    }
+    return 1;
+}
+
+static unsigned int compute_checksum(const tar_header_t *h) {
+    const uint8_t *bytes = (const uint8_t *)h;
+    unsigned int sum = 0;
+
+    for (int i = 0; i < BLOCKSIZE; i++) {
+        if (i >= 148 && i < 156) sum += (uint8_t)' '; 
+        else sum += bytes[i];
+    }
+    return sum;
+}
+
+static off_t round_up_512(off_t n) {
+    return (n + 511) & ~((off_t)511);
+}
+
+/* Construit le chemin complet dans out :
+   - si prefix vide : out = name
+   - sinon : out = prefix "/" name
+   Retourne 0 si ok, -1 si overflow.
+*/
+static int header_path(const tar_header_t *h, char out[PATHBUF]) {
+    char name[sizeof(h->name) + 1];
+    char prefix[sizeof(h->prefix) + 1];
+
+    memcpy(name, h->name, sizeof(h->name));
+    name[sizeof(h->name)] = '\0';
+
+    memcpy(prefix, h->prefix, sizeof(h->prefix));
+    prefix[sizeof(h->prefix)] = '\0';
+
+
+    if (prefix[0] == '\0') {
+        if (strlen(name) >= PATHBUF) return -1;
+        strcpy(out, name);
+        return 0;
+    } else {
+        size_t need = strlen(prefix) + 1 + strlen(name);
+        if (need >= PATHBUF) return -1;
+        strcpy(out, prefix);
+        strcat(out, "/");
+        strcat(out, name);
+        return 0;
+    }
+}
 
 /**
  * Checks whether the archive is valid.
@@ -17,7 +77,49 @@
  */
 int check_archive(int tar_fd) {
     // TODO
-    return 0;
+    if (lseek(tar_fd, 0, SEEK_SET) == (off_t)-1) {
+        return -3;
+    }
+
+    int count = 0;
+    tar_header_t h;
+
+    while (1) {
+        ssize_t r = read(tar_fd, &h, sizeof(h));
+        if (r != (ssize_t)sizeof(h)) {
+            return -3;
+        }
+
+        if (is_zero_block((const uint8_t *)&h)) {
+            tar_header_t h2;
+            ssize_t r2 = read(tar_fd, &h2, sizeof(h2));
+            if (r2 != (ssize_t)sizeof(h2)) return -3;
+            if (!is_zero_block((const uint8_t *)&h2)) return -3;
+            return count;
+        }
+
+        if (memcmp(h.magic, TMAGIC, TMAGLEN - 1) != 0 || h.magic[TMAGLEN - 1] != '\0') {
+            return -1;
+        }
+
+        if (memcmp(h.version, TVERSION, TVERSLEN) != 0) {
+            return -2;
+        }
+
+        unsigned int stored = (unsigned int)TAR_INT(h.chksum);
+        unsigned int expected = compute_checksum(&h);
+        if (stored != expected) {
+            return -3;
+        }
+
+        off_t size = (off_t)TAR_INT(h.size);
+        off_t skip = round_up_512(size);
+        if (skip > 0 && lseek(tar_fd, skip, SEEK_CUR) == (off_t)-1) {
+            return -3;
+        }
+
+        count++;
+    }
 }
 
 /**
@@ -31,7 +133,37 @@ int check_archive(int tar_fd) {
  */
 int exists(int tar_fd, char *path) {
     // TODO
-    return 0;
+    if (path == NULL) return -1;
+
+    if (lseek(tar_fd, 0, SEEK_SET) == (off_t)-1) return -1;
+
+    tar_header_t h;
+    char fullpath[PATHBUF];
+
+    while (1) {
+        ssize_t r = read(tar_fd, &h, sizeof(h));
+        if (r != (ssize_t)sizeof(h)) {
+            return -1;
+        }
+
+        if (is_zero_block((const uint8_t *)&h)) {
+            return 0;
+        }
+
+        if (header_path(&h, fullpath) == -1) {
+            return -1;
+        }
+
+        if (strcmp(fullpath, path) == 0) {
+            return 1;
+        }
+
+        off_t size = (off_t)TAR_INT(h.size);
+        off_t skip = round_up_512(size);
+        if (skip > 0 && lseek(tar_fd, skip, SEEK_CUR) == (off_t)-1) {
+            return -1;
+        }
+    }
 }
 
 /**
