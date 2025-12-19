@@ -2,8 +2,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 #include "lib_tar.h"
+
+#define MAX_ENTRIES 128
+#define PATHBUF 512
 
 /**
  * You are free to use this file to write tests for your implementation
@@ -36,8 +40,59 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    // --- CHECK ARCHIVE TEST ---
+
+    printf("\n--- CHECK ARCHIVE TEST ---\n");
+
     int ret = check_archive(fd);
     printf("check_archive returned %d\n", ret);
+
+
+    // --- EXISTS TESTS ----
+
+    printf("\n--- EXISTS TESTS ---\n");
+
+    char *test_paths[] = {
+        "test1.txt",
+        "test2.txt",
+        "test3.txt",
+        "dir1/test1.txt",
+        "dir1/test2.txt",
+        "dir1/test3.txt", // non
+        "dir2/", // non
+        "dir2/test1.txt", // non
+        "nonexistent.txt" // non
+    };
+
+    for (size_t i = 0; i < sizeof(test_paths)/sizeof(test_paths[0]); ++i) {
+        int exists_ret = exists(fd, test_paths[i]);
+        printf("exists(%s) returned %d\n", test_paths[i], exists_ret);
+    }
+
+
+    // --- LIST TESTS ----
+
+    printf("\n--- LIST TESTS ---\n");
+
+    size_t no_entries = MAX_ENTRIES;
+
+    char *entries[no_entries];
+    for (size_t i = 0; i < MAX_ENTRIES; ++i) {
+        entries[i] = malloc(PATHBUF);
+    }
+
+
+
+    int ret2 = list(fd, "dir1", entries, &no_entries);
+    printf("list returned %d\n", ret2);
+    int ret3 = list(fd, NULL, entries, &no_entries);
+    printf("list returned %d\n", ret3);
+
+    // problème : renvoie le dir actuel comme étant un enfant direct de lui-même
+    
+
+    close(fd);
+
 
     return 0;
 }

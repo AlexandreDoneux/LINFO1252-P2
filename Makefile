@@ -1,10 +1,14 @@
 CFLAGS=-g -Wall -Werror
 
 all: tests lib_tar.o
+	echo "all"
 
 lib_tar.o: lib_tar.c lib_tar.h
 
-tests: tests.c lib_tar.o
+tests: tests.c lib_tar.o archive
+	cd archive && tar -cf ../archive.tar *
+	gcc $(CFLAGS) -o tests tests.c lib_tar.o
+	./tests archive.tar
 
 clean:
 	rm -f lib_tar.o tests soumission.tar
