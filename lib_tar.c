@@ -71,15 +71,24 @@ static int header_path(const tar_header_t *h, char out[PATHBUF]) {
 int is_direct_child(const char *file, const char *dir)
 {
     size_t dlen = strlen(dir);
+    //printf("dir : %s, dlen: %zu\n", dir, dlen);
+    //printf("file : %s\n", file);
 
     // si dir root ("")
     if (dlen == 0) {
         return strchr(file, '/') == NULL; // vérifie qu'il n'y a pas de "/" dans path de file => sans "/" le fichier est à la racine
     }
 
-    // commence pas avec dir
+    // if file path does not start with dir path -> not good
     if (strncmp(file, dir, dlen) != 0)
         return 0;
+
+    // If file equals dir -> not good
+    if (file[dlen] == '\0')
+        return 0;
+
+    /* Must not contain another '/' after dir */
+    return strchr(file + dlen, '/') == NULL;
 
     // vérifie qu'il n'y a pas de "/" après
     return strchr(file + dlen, '/') == NULL;
@@ -376,8 +385,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         if (is_direct_child(file_path, list_path)) {
             printf("direct child found: %s\n", file_path);
         }
-
-        // ok mais affiche aussi le dir comme étant un enfant direct de lui-même => à corriger
+        
 
         // moves file descriptor to next header by skipping file content
         off_t size = (off_t)TAR_INT(header.size);
