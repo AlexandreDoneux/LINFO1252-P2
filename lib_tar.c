@@ -85,6 +85,33 @@ int is_direct_child(const char *file, const char *dir)
     return strchr(file + dlen, '/') == NULL;
 }
 
+
+static int find_entry(int tar_fd, const char *path, tar_header_t *out) {
+    if (!path) return -1;
+    if (lseek(tar_fd, 0, SEEK_SET) == (off_t)-1) return -1;
+
+    tar_header_t h;
+    char fullpath[512];
+
+    while (1) {
+        ssize_t r = read(tar_fd, &h, sizeof(h));
+        if (r != (ssize_t)sizeof(h)) return -1;
+
+        if (is_zero_block((const uint8_t *)&h)) return 0;
+
+        if (header_path(&h, fullpath) == -1) return -1;
+
+        if (strcmp(fullpath, path) == 0) {
+            if (out) *out = h;
+            return 1;
+        }
+
+        off_t size = (off_t)TAR_INT(h.size);
+        off_t skip = round_up_512(size);
+        if (skip > 0 && lseek(tar_fd, skip, SEEK_CUR) == (off_t)-1) return -1;
+    }
+}
+
 /**
  * Checks whether the archive is valid.
  *
@@ -202,7 +229,10 @@ int exists(int tar_fd, char *path) {
  */
 int is_dir(int tar_fd, char *path) {
     // TODO
-    return 0;
+    tar_header_t h;
+    int r = find_entry(tar_fd, path, &h);
+    if (r <= 0) return 0;
+    return (h.typeflag == DIRTYPE) ? 1 : 0;
 }
 
 /**
@@ -216,7 +246,10 @@ int is_dir(int tar_fd, char *path) {
  */
 int is_file(int tar_fd, char *path) {
     // TODO
-    return 0;
+    tar_header_t h;
+    int r = find_entry(tar_fd, path, &h);
+    if (r <= 0) return 0;
+    return (h.typeflag == REGTYPE || h.typeflag == AREGTYPE) ? 1 : 0;
 }
 
 /**
@@ -229,7 +262,10 @@ int is_file(int tar_fd, char *path) {
  */
 int is_symlink(int tar_fd, char *path) {
     // TODO
-    return 0;
+    tar_header_t h;
+    int r = find_entry(tar_fd, path, &h);
+    if (r <= 0) return 0;
+    return (h.typeflag == SYMTYPE) ? 1 : 0;
 }
 
 /**

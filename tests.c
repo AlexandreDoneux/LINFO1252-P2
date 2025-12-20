@@ -69,6 +69,40 @@ int main(int argc, char **argv) {
         printf("exists(%s) returned %d\n", test_paths[i], exists_ret);
     }
 
+    // --- IS_DIR TESTS ----
+
+    printf("\n--- IS_DIR TESTS ---\n");
+
+    char *dir_paths[] = {
+        "dir1/",     
+        "dir2/",     // non
+        "test1.txt", // existe mais ce n'est pas un dossier -> 0
+    };
+
+    for (size_t i = 0; i < sizeof(dir_paths)/sizeof(dir_paths[0]); ++i) {
+        int d = is_dir(fd, dir_paths[i]);
+        printf("is_dir(%s) returned %d\n", dir_paths[i], d);
+    }
+
+    // --- IS_FILE TESTS ----
+
+    printf("\n--- IS_FILE TESTS ---\n");
+
+    char *file_paths[] = {
+        "test1.txt",        // oui
+        "test2.txt",        // oui
+        "test3.txt",        // oui
+        "dir1/test1.txt",   // oui
+        "dir1/test2.txt",   // oui
+        "dir1/",            // non (dossier)
+        "dir2/test1.txt",   // non
+        "nonexistent.txt"   // non
+    };
+
+    for (size_t i = 0; i < sizeof(file_paths)/sizeof(file_paths[0]); ++i) {
+        int r = is_file(fd, file_paths[i]);
+        printf("is_file(%s) returned %d\n", file_paths[i], r);
+    }
 
     // --- LIST TESTS ----
 
