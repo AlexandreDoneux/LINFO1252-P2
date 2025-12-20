@@ -119,8 +119,15 @@ int main(int argc, char **argv) {
 
     int ret2 = list(fd, "dir1", entries, &no_entries);
     printf("list returned %d\n", ret2);
+    for (size_t i = 0; i < no_entries; ++i) {
+        printf("entry %zu: %s\n", i, entries[i]);
+    }
+
     int ret3 = list(fd, NULL, entries, &no_entries);
     printf("list returned %d\n", ret3);
+    for (size_t i = 0; i < no_entries; ++i) {
+        printf("entry %zu: %s\n", i, entries[i]);
+    }
 
     // problème : renvoie le dir actuel comme étant un enfant direct de lui-même
     

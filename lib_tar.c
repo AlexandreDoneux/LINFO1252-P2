@@ -68,6 +68,7 @@ static int header_path(const tar_header_t *h, char out[PATHBUF]) {
  *
  * Renvoie 1 si c'est le cas, 0 sinon.
  */
+/*
 int is_direct_child(const char *file, const char *dir)
 {
     size_t dlen = strlen(dir);
@@ -87,11 +88,29 @@ int is_direct_child(const char *file, const char *dir)
     if (file[dlen] == '\0')
         return 0;
 
-    /* Must not contain another '/' after dir */
-    return strchr(file + dlen, '/') == NULL;
-
     // vérifie qu'il n'y a pas de "/" après
     return strchr(file + dlen, '/') == NULL;
+}
+*/
+// better implement that handles "/" better
+int is_direct_child(const char *file, const char *dir)
+{
+    size_t dlen = strlen(dir);
+
+    if (dlen == 0) {
+        char *slash = strchr(file, '/');
+        return slash == NULL || slash[1] == '\0';
+    }
+
+    if (strncmp(file, dir, dlen) != 0)
+        return 0;
+
+    const char *rest = file + dlen;
+    if (*rest == '\0')
+        return 0;
+
+    char *slash = strchr(rest, '/');
+    return slash == NULL || slash[1] == '\0';
 }
 
 
@@ -366,6 +385,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
 
     tar_header_t header;
     char file_path[PATHBUF];
+    int number_of_entries = 0;
 
     while (1) {
         const ssize_t r = read(tar_fd, &header, sizeof(header));
@@ -381,11 +401,19 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
 
         // vérification ici !
 
+
         // add to entries if match
         if (is_direct_child(file_path, list_path)) {
-            printf("direct child found: %s\n", file_path);
+            //printf("direct child found: %s\n", file_path);
+
+            //entries[number_of_entries] = file_path; // wrong ! Revient à faire pointer l'entrée vers la même zone mémoire à chaque fois
+            strncpy(entries[number_of_entries], file_path, PATHBUF); // copier le contenu
+
+            printf("added entry: %s\n", entries[number_of_entries]);
+            number_of_entries++;
+            printf("number of entries: %d\n", number_of_entries);
         }
-        
+        *no_entries = number_of_entries;
 
         // moves file descriptor to next header by skipping file content
         off_t size = (off_t)TAR_INT(header.size);
