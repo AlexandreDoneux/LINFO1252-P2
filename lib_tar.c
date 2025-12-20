@@ -354,6 +354,17 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
 
     if (no_entries == NULL || entries == NULL) return -1;
 
+    // needs to return 0 if no directory at the given path exists in the archive
+    if (path != NULL && is_dir(tar_fd, path) == 0) {
+        *no_entries = 0;
+        return 0;
+    }
+
+    // empty archive ?
+
+    // archive with symlink ?
+
+
     // if path is NULL, set it to the tar root
     //char list_path[PATHBUF];
     char *list_path;
@@ -391,7 +402,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
             return -1;
         }
         if (is_zero_block((const uint8_t *)&header)) {
-            return 0;
+            return 1; // needs to return 1 if success
         }
         if (header_path(&header, file_path) == -1) {
             return -1;
@@ -420,8 +431,6 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
             return -1;
         }
     }
-
-    return 0;
 }
 
 /**
