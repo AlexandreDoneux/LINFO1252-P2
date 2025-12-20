@@ -375,9 +375,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         list_path = normalized_path;
     }
 
-    printf("4\n");
-
-    printf("list path: %s\n", list_path);
+    //printf("list path: %s\n", list_path);
 
 
 
@@ -409,9 +407,9 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
             //entries[number_of_entries] = file_path; // wrong ! Revient à faire pointer l'entrée vers la même zone mémoire à chaque fois
             strncpy(entries[number_of_entries], file_path, PATHBUF); // copier le contenu
 
-            printf("added entry: %s\n", entries[number_of_entries]);
+            //printf("added entry: %s\n", entries[number_of_entries]);
             number_of_entries++;
-            printf("number of entries: %d\n", number_of_entries);
+            //printf("number of entries: %d\n", number_of_entries);
         }
         *no_entries = number_of_entries;
 
@@ -422,17 +420,6 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
             return -1;
         }
     }
-
-
-
-
-
-
-
-    printf("list absolute path: %s\n", list_path);
-
-
-
 
     return 0;
 }
