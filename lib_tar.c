@@ -129,6 +129,66 @@ static int find_entry(int tar_fd, const char *path, tar_header_t *out) {
 
         if (header_path(&h, fullpath) == -1) return -1;
 
+        // if path + "/" is equal to fullpath, we might have found a symlink directory
+        // so we check if h is a symlink and if so, we resolve it to its target
+        size_t flen = strlen(fullpath);
+        if (flen + 1 < PATHBUF) {
+            char fullpath_slash[PATHBUF];
+            memcpy(fullpath_slash, fullpath, flen);
+            fullpath_slash[flen] = '/';
+            fullpath_slash[flen + 1] = '\0';
+
+            //printf("comparing with symlink dir: %s\n", fullpath_slash);
+            //printf("comparing with dir: %s\n", path);
+
+            if (strcmp(fullpath_slash, path) == 0) {
+                //printf("passes\n");
+                if (h.typeflag == SYMTYPE) {
+                    //printf("passes2\n");
+                    /* copy and null-terminate link target safely */
+                    char link_target[PATHBUF];
+                    size_t ln_sz = sizeof(h.linkname);
+                    size_t cp = ln_sz < (PATHBUF - 1) ? ln_sz : (PATHBUF - 1);
+                    memcpy(link_target, h.linkname, cp);
+                    link_target[cp] = '\0';
+
+                    /* try resolving the symlink to its target entry */
+                    int res = find_entry(tar_fd, link_target, out);
+                    //printf("passes2bis\n");
+                    if (res == 1) return 1;
+                    if (res == -1) return -1;
+
+                    /* if direct target not found, try appending a trailing slash to the link target */
+                    size_t lt_len = strlen(link_target);
+                    if (lt_len + 1 < PATHBUF) {
+                        //printf("passes3\n");
+                        link_target[lt_len] = '/';
+                        link_target[lt_len + 1] = '\0';
+                        res = find_entry(tar_fd, link_target, out);
+                        //printf("res after adding slash: %d\n", res);
+                        //printf("out path after adding slash: ");
+                        /*
+                        if (res == 1 && out) {
+                            char out_path[PATHBUF];
+                            header_path(out, out_path);
+                            printf("%s\n", out_path); // works well, finds the correct path for the symlink target
+                        }
+                        */
+                        //printf("before return after adding slash\n");
+                        return res;
+                    }
+                    //printf("passes4\n");
+                    return 0;
+                } else {
+                    //printf("passes5\n");
+                    /* header represents the directory (with trailing slash in comparison) */
+                    if (out) *out = h;
+                    return 1;
+                }
+            }
+        }
+
+
         if (strcmp(fullpath, path) == 0) {
             if (out) *out = h;
             return 1;
@@ -327,6 +387,36 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
 
 
     // check symlink here + resolve to linked-to entry
+    if (path != NULL && strcmp(path, "") != 0 && is_symlink(tar_fd, path)) {
+        tar_header_t h;
+        int r = find_entry(tar_fd, path, &h); // find_entry() toujours un problème car quand on récupères le path d'un symlink, on n'a pas le "/" à la fin
+        //find_entry(tar_fd, path, &h); // find_entry() toujours un problème car quand on récupères le path d'un symlink, on n'a pas le "/" à la fin
+
+
+        // find_entry works and seems to give the correct real path for the symlink target, but despite the return valuea being 1,
+        // the prints here don't print and the list() function returns 1 despite giving nothing in the entries array
+        //printf(" r from find_entry: %d\n", r);
+        if (r == -1) return -1;
+
+        //printf("hey\n");
+
+        header_path(&h, path);
+        //printf("resolved symlink path: %s\n", path);
+
+        /*
+        if (r == -1) return -1;
+        if (r == 1 && h.typeflag == SYMTYPE) {
+            // resolve symlink
+            char link_target[PATHBUF];
+            memcpy(link_target, h.linkname, sizeof(h.linkname));
+            link_target[sizeof(h.linkname)] = '\0';
+
+            // update path to linked-to entry
+            path = link_target;
+            printf("paht is symlink, resolved to: %s\n", path);
+        }
+        */
+    }
 
     // needs to return 0 if no directory at the given path exists in the archive
     if (path != NULL && strcmp(path, "") != 0 && is_dir(tar_fd, path) == 0) {
