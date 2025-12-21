@@ -98,8 +98,11 @@ int main(int argc, char **argv) {
         "dir1/test2.txt",   // oui
         "dir1/",            // non (dossier)
         "dir2/test1.txt",   // non
-        "nonexistent.txt"   // non
+        "nonexistent.txt",   // non
+        "dir_symlink/",
+        "test_symlink.txt"
     };
+    // problème : is_file() ne gère pas les symlinks, aussi le problème pour find_entry()
 
     for (size_t i = 0; i < sizeof(file_paths)/sizeof(file_paths[0]); ++i) {
         ret = is_file(fd, file_paths[i]);
@@ -125,7 +128,19 @@ int main(int argc, char **argv) {
 
 
 
-    printf("\ntest 1: list root\n");
+    printf("\ntest 1 : list root\n");
+
+    no_entries = MAX_ENTRIES;
+    ret = list(fd, "", entries, &no_entries);
+    printf("list returned %d\n", ret);
+    for (size_t i = 0; i < no_entries; ++i) {
+        printf("entry %zu: %s\n", i, entries[i]);
+    }
+
+
+    printf("\ntest 2 : list dir1\n");
+
+    no_entries = MAX_ENTRIES;
     ret = list(fd, "dir1/", entries, &no_entries);
     printf("list returned %d\n", ret);
     for (size_t i = 0; i < no_entries; ++i) {
@@ -133,7 +148,19 @@ int main(int argc, char **argv) {
     }
 
 
-    printf("\ntest2 : list NULL (root)\n");
+    printf("\ntest 4 : list symlink\n");
+
+    no_entries = MAX_ENTRIES;
+    ret = list(fd, "dir_symlink/", entries, &no_entries);
+    printf("list returned %d\n", ret);
+    for (size_t i = 0; i < no_entries; ++i) {
+        printf("entry %zu: %s\n", i, entries[i]);
+    }
+
+
+    printf("\ntest 3 : list NULL (root)\n");
+
+    no_entries = MAX_ENTRIES;
     ret = list(fd, NULL, entries, &no_entries);
     printf("list returned %d\n", ret);
     for (size_t i = 0; i < no_entries; ++i) {
@@ -141,12 +168,7 @@ int main(int argc, char **argv) {
     }
 
 
-    printf("\ntest3 : list symlink\n");
-    ret = list(fd, "dir_symlink/", entries, &no_entries);
-    printf("list returned %d\n", ret);
-    for (size_t i = 0; i < no_entries; ++i) {
-        printf("entry %zu: %s\n", i, entries[i]);
-    }
+
 
     // problème : find_entry() récpération d'un path symlink via header_path() donne dir_symlink (sans le /)
 

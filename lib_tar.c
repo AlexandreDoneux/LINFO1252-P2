@@ -388,7 +388,6 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
     //printf("list path: %s\n", list_path);
 
 
-
     if (lseek(tar_fd, 0, SEEK_SET) == (off_t)-1) return -1; // moves the file descriptor to the beginning of the tar => really needed ?
 
     tar_header_t header;
