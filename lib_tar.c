@@ -321,51 +321,23 @@ int is_symlink(int tar_fd, char *path) {
  *         -1 in case of error.
  */
 int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
-    // TODO
-
     // pas besoin de checker l'archive, on suppose qu'elle est valide
-
-    // vérification si path null -> définit le path comme étant la racine
-    // Si path donné est un symlink -> traduction du path
-
-    // but des paramètres entries et no_entries :
-    //      -> remplir entries avec les entrées trouvées dans le répertoire path
-    //      -> no_entries est un nombre :
-    //          - en entrée : nombre max d'entrées que peut contenir entries
-    //          - en sortie : nombre d'entrées effectivement trouvées et écrites dans entries => doit être <= no_entries en entrée (-1 si au delà ?)
-
-
-
-
-
-    // vérification si path null -> définit le path comme étant la racine
-    // Si path donné est un symlink -> traduction du path (utilisation de is_symlink pour vérifier)
-    //
-
-    // Comme pour exists on peut lire les headers un par un et vérifier si ils sont dans le répertoire path
-
-    //      -> on vérifie si symlink avec is_symlink + traduction ??? => pas sur => pense pas
-    //      -> on construit le path complet avec header_path
-    //      -> on vérifie si le path complet est dans le répertoire path (un seul fichier dir, pas de récursivité)
-    //      -> si oui on l'ajoute dans entries (si on n'a pas dépassé no_entries en entrée)
-    //      -> on incrémente un compteur pour no_entries en sortie
-
-    // ATTENTION : on ne peut pas utiliser realpath() car il résout les symlinks du système de fichiers, or on travaille sur une archive tar
 
     if (no_entries == NULL || entries == NULL) return -1;
 
+
+    // check symlink here + resolve to linked-to entry
+
     // needs to return 0 if no directory at the given path exists in the archive
-    if (path != NULL && is_dir(tar_fd, path) == 0) {
+    if (path != NULL && strcmp(path, "") != 0 && is_dir(tar_fd, path) == 0) {
+        //printf("no path, not a dir or not root \n");
         *no_entries = 0;
         return 0;
     }
 
 
-    // archive with symlink ?
-
 
     // if path is NULL, set it to the tar root
-    //char list_path[PATHBUF];
     char *list_path;
     char normalized_path[PATHBUF]; // path with trailing slash
 
@@ -418,18 +390,12 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
 
         // add to entries if match
         if (is_direct_child(file_path, list_path)) {
-            //printf("direct child found: %s\n", file_path);
-/* Error start here*/
             //entries[number_of_entries] = file_path; // wrong ! Revient à faire pointer l'entrée vers la même zone mémoire à chaque fois
             //strncpy(entries[number_of_entries], file_path, PATHBUF); // copier le contenu -> PROBLEM HERE
             strncpy(entries[number_of_entries], file_path, strlen(file_path) + 1);
-/*error end here*/
 
-            //printf("added entry: %s\n", entries[number_of_entries]);
             number_of_entries++;
-            //printf("number of entries: %d\n", number_of_entries);
         }
-
 
         *no_entries = number_of_entries;
 
