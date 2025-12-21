@@ -34,17 +34,19 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    int fd = open(argv[1] , O_RDONLY);
+    int fd = open(argv[1] , O_RDWR);
     if (fd == -1) {
         perror("open(tar_file)");
         return -1;
     }
 
+    int ret; // return value
+
     // --- CHECK ARCHIVE TEST ---
 
     printf("\n--- CHECK ARCHIVE TEST ---\n");
 
-    int ret = check_archive(fd);
+    ret = check_archive(fd);
     printf("check_archive returned %d\n", ret);
 
 
@@ -65,8 +67,8 @@ int main(int argc, char **argv) {
     };
 
     for (size_t i = 0; i < sizeof(test_paths)/sizeof(test_paths[0]); ++i) {
-        int exists_ret = exists(fd, test_paths[i]);
-        printf("exists(%s) returned %d\n", test_paths[i], exists_ret);
+        ret = exists(fd, test_paths[i]);
+        printf("exists(%s) returned %d\n", test_paths[i], ret);
     }
 
     // --- IS_DIR TESTS ----
@@ -80,8 +82,8 @@ int main(int argc, char **argv) {
     };
 
     for (size_t i = 0; i < sizeof(dir_paths)/sizeof(dir_paths[0]); ++i) {
-        int d = is_dir(fd, dir_paths[i]);
-        printf("is_dir(%s) returned %d\n", dir_paths[i], d);
+        ret = is_dir(fd, dir_paths[i]);
+        printf("is_dir(%s) returned %d\n", dir_paths[i], ret);
     }
 
     // --- IS_FILE TESTS ----
@@ -100,8 +102,8 @@ int main(int argc, char **argv) {
     };
 
     for (size_t i = 0; i < sizeof(file_paths)/sizeof(file_paths[0]); ++i) {
-        int r = is_file(fd, file_paths[i]);
-        printf("is_file(%s) returned %d\n", file_paths[i], r);
+        ret = is_file(fd, file_paths[i]);
+        printf("is_file(%s) returned %d\n", file_paths[i], ret);
     }
 
     // --- LIST TESTS ----
@@ -109,30 +111,77 @@ int main(int argc, char **argv) {
     printf("\n--- LIST TESTS ---\n");
 
     size_t no_entries = MAX_ENTRIES;
+    size_t no_entries_2 = MAX_ENTRIES;
 
     char *entries[no_entries];
     for (size_t i = 0; i < MAX_ENTRIES; ++i) {
         entries[i] = malloc(PATHBUF);
     }
 
+    char *entries_2[no_entries_2];
+    for (size_t i = 0; i < MAX_ENTRIES; ++i) {
+        entries_2[i] = malloc(PATHBUF);
+    }
 
 
-    int ret2 = list(fd, "dir1", entries, &no_entries);
-    printf("list returned %d\n", ret2);
+
+    printf("\ntest 1: list root\n");
+    ret = list(fd, "dir1/", entries, &no_entries);
+    printf("list returned %d\n", ret);
     for (size_t i = 0; i < no_entries; ++i) {
         printf("entry %zu: %s\n", i, entries[i]);
     }
 
-    int ret3 = list(fd, NULL, entries, &no_entries);
-    printf("list returned %d\n", ret3);
+
+    printf("\ntest2 : list NULL (root)\n");
+    ret = list(fd, NULL, entries, &no_entries);
+    printf("list returned %d\n", ret);
     for (size_t i = 0; i < no_entries; ++i) {
         printf("entry %zu: %s\n", i, entries[i]);
     }
 
-    // problème : renvoie le dir actuel comme étant un enfant direct de lui-même
+
+    printf("\ntest3 : list symlink\n");
+    ret = list(fd, "dir_symlink/", entries, &no_entries);
+    printf("list returned %d\n", ret);
+    for (size_t i = 0; i < no_entries; ++i) {
+        printf("entry %zu: %s\n", i, entries[i]);
+    }
+
+    // problème : find_entry() récpération d'un path symlink via header_path() donne dir_symlink (sans le /)
+
+
+    // --- ADD_FILE TESTS ----
+
+    printf("\n--- ADD_FILE TESTS ---\n");
+
+
+    uint8_t file_content[] = "This is a test file content.\n";
+    size_t file_length = sizeof(file_content) - 1; // exclude null terminator
+    ret = add_file(fd, "new_test_file.txt", file_content, file_length);
+    printf("add_file returned %d\n", ret);
+
+    ret = list(fd, NULL, entries_2, &no_entries_2);
+    printf("list after add_file returned %d\n", ret);
+    for (size_t i = 0; i < no_entries_2; ++i) {
+        printf("entry %zu: %s\n", i, entries_2[i]);
+    }
+
+
+    // should give back error (file already existing)
+    ret = add_file(fd, "new_test_file.txt", file_content, file_length);
+    printf("add_file returned %d\n", ret);
+
+    ret = list(fd, NULL, entries_2, &no_entries_2);
+    printf("list after add_file returned %d\n", ret);
+    for (size_t i = 0; i < no_entries_2; ++i) {
+        printf("entry %zu: %s\n", i, entries_2[i]);
+    }
+
     
 
     close(fd);
+
 
 
     return 0;

@@ -1,7 +1,7 @@
 #include "lib_tar.h"
-#include <unistd.h>   
-#include <string.h>   
-#include <stdint.h>  
+#include <unistd.h>
+#include <string.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,7 +23,7 @@ static unsigned int compute_checksum(const tar_header_t *h) {
     unsigned int sum = 0;
 
     for (int i = 0; i < BLOCKSIZE; i++) {
-        if (i >= 148 && i < 156) sum += (uint8_t)' '; 
+        if (i >= 148 && i < 156) sum += (uint8_t)' ';
         else sum += bytes[i];
     }
     return sum;
@@ -360,7 +360,6 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         return 0;
     }
 
-    // empty archive ?
 
     // archive with symlink ?
 
@@ -395,8 +394,14 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
     tar_header_t header;
     char file_path[PATHBUF];
     int number_of_entries = 0;
+    int max_number_of_entries = (int)(*no_entries);
 
     while (1) {
+        // checks if we reached max entries
+        if (number_of_entries >= max_number_of_entries) {
+            return 1;
+        }
+
         const ssize_t r = read(tar_fd, &header, sizeof(header));
         if (r != (ssize_t)sizeof(header)) {
             return -1;
@@ -404,6 +409,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         if (is_zero_block((const uint8_t *)&header)) {
             return 1; // needs to return 1 if success
         }
+        // get path
         if (header_path(&header, file_path) == -1) {
             return -1;
         }
@@ -414,14 +420,18 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         // add to entries if match
         if (is_direct_child(file_path, list_path)) {
             //printf("direct child found: %s\n", file_path);
-
+/* Error start here*/
             //entries[number_of_entries] = file_path; // wrong ! Revient à faire pointer l'entrée vers la même zone mémoire à chaque fois
-            strncpy(entries[number_of_entries], file_path, PATHBUF); // copier le contenu
+            //strncpy(entries[number_of_entries], file_path, PATHBUF); // copier le contenu -> PROBLEM HERE
+            strncpy(entries[number_of_entries], file_path, strlen(file_path) + 1);
+/*error end here*/
 
             //printf("added entry: %s\n", entries[number_of_entries]);
             number_of_entries++;
             //printf("number of entries: %d\n", number_of_entries);
         }
+
+
         *no_entries = number_of_entries;
 
         // moves file descriptor to next header by skipping file content
@@ -431,6 +441,9 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
             return -1;
         }
     }
+
+
+    return 0;
 }
 
 /**
@@ -448,10 +461,97 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
  *         -2 if an error occurred
  */
 int add_file(int tar_fd, char *filename, uint8_t *src, size_t len) {
-    // TODO
 
-    // pas besoin de checker l'archive, on suppose qu'elle est valide
+    if (!filename || !src) return -2;
 
-    // écriture dans des fichiers abordés dans le syllabus
+
+    // if entry already exists -> error
+    if (exists(tar_fd, filename)) {
+        perror("add_file () : file already exists");
+        return -1;
+    }
+
+
+    // find end of archive (first zero block)
+    if (lseek(tar_fd, 0, SEEK_SET) == (off_t)-1) return -2;
+
+    tar_header_t h;
+    while (1) {
+        ssize_t r = read(tar_fd, &h, sizeof(h));
+        if (r != (ssize_t)sizeof(h)) return -2;
+
+        if (is_zero_block((const uint8_t *)&h)) {
+            tar_header_t h2;
+            ssize_t r2 = read(tar_fd, &h2, sizeof(h2));
+            if (r2 != (ssize_t)sizeof(h2)) return -2;
+
+            if (is_zero_block((const uint8_t *)&h2)) {
+                /* two consecutive zero blocks -> rewind to start of the first zero block */
+                if (lseek(tar_fd, -(off_t)(2 * BLOCKSIZE), SEEK_CUR) == (off_t)-1)
+                    return -2;
+                break;
+            } else {
+                /* false alarm: position back at start of h2 so next loop will process it */
+                if (lseek(tar_fd, -(off_t)BLOCKSIZE, SEEK_CUR) == (off_t)-1)
+                    return -2;
+                continue;
+            }
+        }
+
+        off_t size = (off_t)TAR_INT(h.size);
+        off_t skip = round_up_512(size);
+        if (skip && lseek(tar_fd, skip, SEEK_CUR) == (off_t)-1)
+            return -2;
+    }
+
+    // build new header
+    tar_header_t newh;
+    memset(&newh, 0, sizeof(newh));
+
+    // name
+    strncpy(newh.name, filename, sizeof(newh.name));
+
+    // size (octal)
+    snprintf(newh.size, sizeof(newh.size), "%011o", (unsigned int)len);
+
+    // type, magic et version
+    newh.typeflag = REGTYPE;
+    memcpy(newh.magic, TMAGIC, TMAGLEN);
+    memcpy(newh.version, TVERSION, TVERSLEN);
+
+    // checksum: fill with spaces first
+    memset(newh.chksum, ' ', sizeof(newh.chksum));
+    unsigned int cksum = compute_checksum(&newh);
+    snprintf(newh.chksum, sizeof(newh.chksum), "%06o", cksum);
+    newh.chksum[6] = '\0';
+    newh.chksum[7] = ' ';
+
+
+    // write header
+    if (write(tar_fd, &newh, sizeof(newh)) != sizeof(newh)){
+        return -2;
+    }
+
+
+
+    // write file data
+    if (len > 0 && write(tar_fd, src, len) != (ssize_t)len){
+        return -2;
+    }
+
+
+    // pad file data to 512 bytes
+    size_t padding = round_up_512(len) - len;
+    if (padding) {
+        uint8_t pad[BLOCKSIZE] = {0};
+        if (write(tar_fd, pad, padding) != (ssize_t)padding)
+            return -2;
+    }
+
+    // write two zero blocks (end of archive)
+    uint8_t zero[BLOCKSIZE] = {0};
+    if (write(tar_fd, zero, BLOCKSIZE) != BLOCKSIZE) return -2;
+    if (write(tar_fd, zero, BLOCKSIZE) != BLOCKSIZE) return -2;
+
     return 0;
 }
